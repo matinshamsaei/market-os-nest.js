@@ -14,6 +14,8 @@ export async function cleanupUsers(prisma: PrismaService): Promise<void> {
 }
 
 export async function cleanupMarketplace(prisma: PrismaService): Promise<void> {
+  await prisma.processedPaymentWebhook.deleteMany();
+  await prisma.payment.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.cartItem.deleteMany();

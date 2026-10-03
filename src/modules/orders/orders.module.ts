@@ -16,6 +16,6 @@ import { OrderStateMachine } from './helpers';
   imports: [AuthModule, InventoryModule, CartModule, WalletModule, PrismaModule],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersRepository, OrderStateMachine],
-  exports: [OrdersService],
+  exports: [OrdersService, OrdersRepository, OrderStateMachine],
 })
 export class OrdersModule {}

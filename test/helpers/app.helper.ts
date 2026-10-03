@@ -7,7 +7,7 @@ import { AppModule } from '../../src/app.module';
 export async function createTestApp(): Promise<INestApplication<App>> {
   const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
-  const app = moduleFixture.createNestApplication();
+  const app = moduleFixture.createNestApplication({ rawBody: true });
 
   app.useGlobalPipes(
     new ValidationPipe({
