@@ -20,6 +20,8 @@ import {
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
+import { EventBus } from '../events/event-bus';
+import { EventTypes } from '../events/event-types';
 import { OrderStateMachine } from '../orders/helpers';
 import { OrdersRepository } from '../orders/orders.repository';
 import { WalletService } from '../wallet/wallet.service';
@@ -43,6 +45,7 @@ export class PaymentsService {
     private readonly paymentStateMachine: PaymentStateMachine,
     private readonly orderStateMachine: OrderStateMachine,
     private readonly walletService: WalletService,
+    private readonly eventBus: EventBus,
   ) {}
 
   async createPayment(
@@ -85,7 +88,7 @@ export class PaymentsService {
       providerHint: providerType,
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const existingEvent = await this.paymentsRepository.findProcessedWebhook(
         tx,
         providerType,
@@ -135,6 +138,15 @@ export class PaymentsService {
         status: updatedPayment.status,
       };
     });
+
+    if (result.status === PaymentStatus.SUCCEEDED && result.paymentId) {
+      const payment = await this.paymentsRepository.findByIdWithOrder(result.paymentId);
+      if (payment) {
+        await this.publishOrderPaidEvent(payment);
+      }
+    }
+
+    return result;
   }
 
   async listFailedPayments(user: TokenPayload): Promise<Payment[]> {
@@ -201,15 +213,22 @@ export class PaymentsService {
           continue;
         }
 
-        await this.prisma.$transaction(async (tx) => {
+        const updatedPayment = await this.prisma.$transaction(async (tx) => {
           const locked = await this.paymentsRepository.findByIdForUpdate(tx, payment.id);
 
           if (!locked || locked.status !== PaymentStatus.PROCESSING) {
-            return;
+            return null;
           }
 
-          await this.applyStatusTransition(tx, locked, nextStatus);
+          return this.applyStatusTransition(tx, locked, nextStatus);
         });
+
+        if (updatedPayment?.status === PaymentStatus.SUCCEEDED) {
+          await this.publishOrderPaidEvent({
+            ...payment,
+            order: payment.order,
+          });
+        }
 
         repaired += 1;
       } catch (error) {
@@ -374,5 +393,19 @@ export class PaymentsService {
     }
 
     await this.ordersRepository.updateStatus(tx, payment.order.id, OrderStatus.PAID);
+  }
+
+  private async publishOrderPaidEvent(payment: Payment & { order: Order }): Promise<void> {
+    await this.eventBus.publish({
+      id: crypto.randomUUID(),
+      type: EventTypes.ORDER_PAID,
+      occurredAt: new Date(),
+      payload: {
+        orderId: payment.order.id,
+        userId: payment.order.userId,
+        paymentId: payment.id,
+        amount: payment.amount,
+      },
+    });
   }
 }

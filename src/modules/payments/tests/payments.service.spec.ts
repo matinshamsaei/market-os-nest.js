@@ -11,6 +11,7 @@ import { OrderStatus, PaymentProviderType, PaymentStatus, UserRole } from '@pris
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
+import { EventBus } from '../../events/event-bus';
 import { OrderStateMachine } from '../../orders/helpers';
 import { OrdersRepository } from '../../orders/orders.repository';
 import { WalletService } from '../../wallet/wallet.service';
@@ -110,6 +111,11 @@ describe('PaymentsService', () => {
     canTransition: jest.fn(),
   };
 
+  const mockEventBus = {
+    publish: jest.fn(),
+    subscribe: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -132,6 +138,7 @@ describe('PaymentsService', () => {
     mockPaymentStateMachine.assertCanTransition.mockReset();
     mockPaymentStateMachine.assertCanTransition.mockImplementation(() => undefined);
     mockOrderStateMachine.canTransition.mockReturnValue(true);
+    mockEventBus.publish.mockResolvedValue(undefined);
 
     mockPrismaService.$transaction.mockImplementation((callback) => {
       if (typeof callback === 'function') {
@@ -167,6 +174,7 @@ describe('PaymentsService', () => {
         { provide: PaymentStateMachine, useValue: mockPaymentStateMachine },
         { provide: OrderStateMachine, useValue: mockOrderStateMachine },
         { provide: WalletService, useValue: mockWalletService },
+        { provide: EventBus, useValue: mockEventBus },
       ],
     }).compile();
 
