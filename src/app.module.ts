@@ -13,6 +13,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { UsersModule } from './modules/users/users.module';
 import { CartModule } from './modules/cart/cart.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { EventsModule } from './modules/events/events.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -28,6 +29,7 @@ import { AppService } from './app.service';
     UsersModule,
     CartModule,
     AuthModule,
+    EventsModule,
 
     PrismaModule,
     ScheduleModule.forRoot(),
