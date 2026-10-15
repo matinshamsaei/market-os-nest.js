@@ -5,8 +5,10 @@ import { OrderStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
+import { EventBus } from '../../events/event-bus';
 import { CartService } from '../../cart/cart.service';
 import { InventoryService } from '../../inventory/inventory.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { WalletService } from '../../wallet/wallet.service';
 import { OrderStateMachine } from '../helpers';
 import { OrdersRepository } from '../orders.repository';
@@ -61,6 +63,15 @@ describe('OrdersService', () => {
     canTransition: jest.fn(),
   };
 
+  const mockEventBus = {
+    subscribe: jest.fn(),
+    publish: jest.fn(),
+  };
+
+  const mockNotificationsService = {
+    create: jest.fn(),
+  };
+
   const cart = {
     items: [
       {
@@ -106,6 +117,8 @@ describe('OrdersService', () => {
         { provide: WalletService, useValue: mockWalletService },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: OrderStateMachine, useValue: mockStateMachine },
+        { provide: EventBus, useValue: mockEventBus },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 

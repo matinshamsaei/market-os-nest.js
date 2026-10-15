@@ -5,18 +5,40 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { Order, OrderStatus, Prisma, UserRole } from '@prisma/client';
+import {
+  NotificationChannel,
+  NotificationStatus,
+  NotificationType,
+  Order,
+  OrderStatus,
+  Prisma,
+  UserRole,
+} from '@prisma/client';
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
-import { InventoryService } from '../inventory/inventory.service';
-import { WalletService } from '../wallet/wallet.service';
 import { CartService } from '../cart/cart.service';
 import { CartItemResponse } from '../cart/dto';
+import { EventBus } from '../events/event-bus';
+import { DomainEvent } from '../events/event-publisher';
+import { EventTypes } from '../events/event-types';
+import { InventoryService } from '../inventory/inventory.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { WalletService } from '../wallet/wallet.service';
 
 import { CUSTOMER_ORDER_CANCELLABLE_STATUSES, REFUNDABLE_STATUSES } from './constants';
 import { OrdersRepository } from './orders.repository';
 import { OrderStateMachine } from './helpers';
+
+type OrderPaidEvent = DomainEvent<
+  typeof EventTypes.ORDER_PAID,
+  {
+    orderId: string;
+    userId: string;
+    paymentId: string;
+    amount: number;
+  }
+>;
 
 @Injectable()
 export class OrdersService {
@@ -27,7 +49,13 @@ export class OrdersService {
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
     private readonly stateMachine: OrderStateMachine,
-  ) {}
+    private readonly eventBus: EventBus,
+    private readonly notificationsService: NotificationsService,
+  ) {
+    this.eventBus.subscribe(EventTypes.ORDER_PAID, async (event: OrderPaidEvent) => {
+      await this.handleOrderPaid(event);
+    });
+  }
 
   async checkout(user: TokenPayload, idempotencyKey?: string): Promise<Order> {
     if (idempotencyKey) {
@@ -209,6 +237,36 @@ export class OrdersService {
   }
 
   private readonly idempotencyStore = new Map<string, Order>();
+
+  private async handleOrderPaid(event: OrderPaidEvent): Promise<void> {
+    const { orderId, userId } = event.payload;
+    const order = await this.ordersRepository.findById(orderId);
+
+    if (!order) {
+      return;
+    }
+
+    if (order.status === OrderStatus.PAID) {
+      return;
+    }
+
+    if (!this.stateMachine.canTransition(order.status, OrderStatus.PAID)) {
+      return;
+    }
+
+    await this.prisma.$transaction((tx) =>
+      this.ordersRepository.updateStatus(tx, orderId, OrderStatus.PAID),
+    );
+
+    await this.notificationsService.create({
+      userId,
+      type: NotificationType.ORDER_PAID,
+      channel: NotificationChannel.IN_APP,
+      title: 'Order paid',
+      message: `Your order ${order.id} has been paid successfully.`,
+      status: NotificationStatus.SENT,
+    });
+  }
 
   private isRefundableStatus(status: OrderStatus): boolean {
     return REFUNDABLE_STATUSES.includes(status);
