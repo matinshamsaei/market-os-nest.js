@@ -397,7 +397,7 @@ export class PaymentsService {
 
   private async publishOrderPaidEvent(payment: Payment & { order: Order }): Promise<void> {
     await this.eventBus.publish({
-      id: crypto.randomUUID(),
+      id: `order-paid-${payment.id}`,
       type: EventTypes.ORDER_PAID,
       occurredAt: new Date(),
       payload: {
