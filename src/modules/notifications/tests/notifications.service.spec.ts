@@ -9,6 +9,7 @@ import {
 
 import type { TokenPayload } from '@/shared/types';
 
+import { EventTypes } from '../../events/event-types';
 import { NotificationsRepository } from '../notifications.repository';
 import { NotificationsService } from '../notifications.service';
 
@@ -159,6 +160,50 @@ describe('NotificationsService', () => {
       mockNotificationsRepository.markAllRead.mockResolvedValue(0);
 
       await expect(service.markAllAsRead(customer)).resolves.toEqual({ updatedCount: 0 });
+    });
+  });
+
+  describe('createFromDomainEvent', () => {
+    it('creates an in-app notification from an order paid event', async () => {
+      const created = { ...unread, eventId: 'order-paid-payment-1' };
+      mockNotificationsRepository.create.mockResolvedValue(created);
+
+      await expect(
+        service.createFromDomainEvent({
+          id: 'order-paid-payment-1',
+          type: EventTypes.ORDER_PAID,
+          occurredAt: '2026-01-01T00:00:00.000Z',
+          payload: {
+            orderId: 'order-1',
+            userId: customer.userId,
+            paymentId: 'payment-1',
+            amount: 200,
+          },
+        }),
+      ).resolves.toEqual(created);
+
+      expect(mockNotificationsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventId: 'order-paid-payment-1',
+          userId: customer.userId,
+          type: NotificationType.ORDER_PAID,
+          channel: NotificationChannel.IN_APP,
+          message: 'Your order order-1 has been paid successfully.',
+        }),
+      );
+    });
+
+    it('skips events that do not map to a notification', async () => {
+      await expect(
+        service.createFromDomainEvent({
+          id: 'unknown-1',
+          type: 'unknown.event' as never,
+          occurredAt: '2026-01-01T00:00:00.000Z',
+          payload: {},
+        }),
+      ).resolves.toBeNull();
+
+      expect(mockNotificationsRepository.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -5,7 +5,10 @@ import { Notification } from '@prisma/client';
 import type { PaginatedResult } from '@/shared/pagination';
 import type { TokenPayload } from '@/shared/types';
 
+import { DomainEventJob } from '../events/event-publisher';
+
 import { GetNotificationsQueryDto } from './dto';
+import { toNotification } from './notification-from-event';
 import { CreateNotificationData, NotificationsRepository } from './notifications.repository';
 
 @Injectable()
@@ -50,6 +53,16 @@ export class NotificationsService {
   }
 
   create(data: CreateNotificationData): Promise<Notification> {
+    return this.notificationsRepository.create(data);
+  }
+
+  createFromDomainEvent(event: DomainEventJob): Promise<Notification | null> {
+    const data = toNotification(event);
+
+    if (!data?.userId) {
+      return Promise.resolve(null);
+    }
+
     return this.notificationsRepository.create(data);
   }
 }

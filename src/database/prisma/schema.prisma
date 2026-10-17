@@ -278,6 +278,7 @@ model Notification {
   message String
   status  NotificationStatus @default(PENDING)
   readAt  DateTime?
+  eventId String?              @unique
 
   createdAt DateTime @default(now())
 
