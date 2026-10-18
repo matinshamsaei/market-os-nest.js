@@ -1,98 +1,70 @@
 import { NotificationChannel, NotificationStatus, NotificationType } from '@prisma/client';
 
 import { DomainEventJob } from '../events/event-publisher';
-import {
-  OrderCancelledPayload,
-  OrderPaidPayload,
-  OrderShippedPayload,
-  PaymentFailedPayload,
-  RefundCompletedPayload,
-} from '../events/event-payloads';
-import { EventTypes } from '../events/event-types';
+import { EventType, EventTypes } from '../events/event-types';
 
 import { CreateNotificationData } from './notifications.repository';
 
-export function toNotification(event: DomainEventJob): CreateNotificationData | null {
-  switch (event.type) {
-    case EventTypes.ORDER_PAID:
-      return fromOrderPaid(event.id, event.payload as OrderPaidPayload);
-    case EventTypes.ORDER_SHIPPED:
-      return fromOrderShipped(event.id, event.payload as OrderShippedPayload);
-    case EventTypes.ORDER_CANCELLED:
-      return fromOrderCancelled(event.id, event.payload as OrderCancelledPayload);
-    case EventTypes.PAYMENT_FAILED:
-      return fromPaymentFailed(event.id, event.payload as PaymentFailedPayload);
-    case EventTypes.REFUND_COMPLETED:
-      return fromRefundCompleted(event.id, event.payload as RefundCompletedPayload);
-    default:
-      return null;
-  }
-}
+type NotificationSource = {
+  orderId: string;
+  userId: string;
+  amount?: number;
+  reason?: string;
+};
 
-function fromOrderPaid(eventId: string, payload: OrderPaidPayload): CreateNotificationData {
-  return {
-    eventId,
-    userId: payload.userId,
+type NotificationDefinition = {
+  type: NotificationType;
+  title: string;
+  message: (payload: NotificationSource) => string;
+};
+
+const notificationsByEvent: Record<EventType, NotificationDefinition> = {
+  [EventTypes.ORDER_PAID]: {
     type: NotificationType.ORDER_PAID,
-    channel: NotificationChannel.IN_APP,
     title: 'Order paid',
-    message: `Your order ${payload.orderId} has been paid successfully.`,
-    status: NotificationStatus.SENT,
-  };
-}
-
-function fromOrderShipped(eventId: string, payload: OrderShippedPayload): CreateNotificationData {
-  return {
-    eventId,
-    userId: payload.userId,
+    message: ({ orderId }) => `Your order ${orderId} has been paid successfully.`,
+  },
+  [EventTypes.ORDER_SHIPPED]: {
     type: NotificationType.ORDER_SHIPPED,
-    channel: NotificationChannel.IN_APP,
     title: 'Order shipped',
-    message: `Your order ${payload.orderId} has been shipped.`,
-    status: NotificationStatus.SENT,
-  };
-}
-
-function fromOrderCancelled(
-  eventId: string,
-  payload: OrderCancelledPayload,
-): CreateNotificationData {
-  return {
-    eventId,
-    userId: payload.userId,
+    message: ({ orderId }) => `Your order ${orderId} has been shipped.`,
+  },
+  [EventTypes.ORDER_CANCELLED]: {
     type: NotificationType.ORDER_CANCELLED,
-    channel: NotificationChannel.IN_APP,
     title: 'Order cancelled',
-    message: `Your order ${payload.orderId} has been cancelled.`,
-    status: NotificationStatus.SENT,
-  };
-}
-
-function fromPaymentFailed(eventId: string, payload: PaymentFailedPayload): CreateNotificationData {
-  const reason = payload.reason ? `: ${payload.reason}` : '.';
-
-  return {
-    eventId,
-    userId: payload.userId,
+    message: ({ orderId }) => `Your order ${orderId} has been cancelled.`,
+  },
+  [EventTypes.PAYMENT_FAILED]: {
     type: NotificationType.PAYMENT_FAILED,
-    channel: NotificationChannel.IN_APP,
     title: 'Payment failed',
-    message: `Payment for order ${payload.orderId} failed${reason}`,
-    status: NotificationStatus.SENT,
-  };
-}
-
-function fromRefundCompleted(
-  eventId: string,
-  payload: RefundCompletedPayload,
-): CreateNotificationData {
-  return {
-    eventId,
-    userId: payload.userId,
+    message: ({ orderId, reason }) =>
+      reason
+        ? `Payment for order ${orderId} failed: ${reason}`
+        : `Payment for order ${orderId} failed.`,
+  },
+  [EventTypes.REFUND_COMPLETED]: {
     type: NotificationType.REFUND_COMPLETED,
-    channel: NotificationChannel.IN_APP,
     title: 'Refund completed',
-    message: `Your refund of ${payload.amount} for order ${payload.orderId} is complete.`,
+    message: ({ orderId, amount }) => `Your refund of ${amount} for order ${orderId} is complete.`,
+  },
+};
+
+export function toNotification(event: DomainEventJob): CreateNotificationData | null {
+  const definition = notificationsByEvent[event.type];
+
+  if (!definition) {
+    return null;
+  }
+
+  const payload = event.payload as NotificationSource;
+
+  return {
+    eventId: event.id,
+    userId: payload.userId,
+    type: definition.type,
+    channel: NotificationChannel.IN_APP,
+    title: definition.title,
+    message: definition.message(payload),
     status: NotificationStatus.SENT,
   };
 }
