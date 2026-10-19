@@ -332,3 +332,28 @@ model DomainEventRecord {
   @@index([status, updatedAt])
   @@map("domain_events")
 }
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD
+}
+
+model OutboxEvent {
+  id            String            @id
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  availableAt   DateTime          @default(now())
+  processedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime          @default(now())
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}

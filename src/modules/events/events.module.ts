@@ -16,6 +16,7 @@ import { DomainEventsRepository } from './domain-events.repository';
 import { EventBus } from './event-bus';
 import { EventDeliveryService } from './event-delivery.service';
 import { EventsController } from './events.controller';
+import { OutboxService } from './outbox.service';
 import { createRedisConnection } from './redis-connection';
 
 @Module({
@@ -51,7 +52,8 @@ import { createRedisConnection } from './redis-connection';
     DomainEventsRepository,
     EventDeliveryService,
     EventBus,
+    OutboxService,
   ],
-  exports: [EventBus, EventDeliveryService],
+  exports: [EventBus, EventDeliveryService, OutboxService],
 })
 export class EventsModule {}

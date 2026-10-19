@@ -20,8 +20,8 @@ import {
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
-import { EventBus } from '../events/event-bus';
 import { EventTypes } from '../events/event-types';
+import { OutboxService } from '../events/outbox.service';
 import { OrderStateMachine } from '../orders/helpers';
 import { OrdersRepository } from '../orders/orders.repository';
 import { WalletService } from '../wallet/wallet.service';
@@ -45,7 +45,7 @@ export class PaymentsService {
     private readonly paymentStateMachine: PaymentStateMachine,
     private readonly orderStateMachine: OrderStateMachine,
     private readonly walletService: WalletService,
-    private readonly eventBus: EventBus,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async createPayment(
@@ -139,13 +139,6 @@ export class PaymentsService {
       };
     });
 
-    if (result.status === PaymentStatus.SUCCEEDED && result.paymentId) {
-      const payment = await this.paymentsRepository.findByIdWithOrder(result.paymentId);
-      if (payment) {
-        await this.publishOrderPaidEvent(payment);
-      }
-    }
-
     return result;
   }
 
@@ -223,14 +216,9 @@ export class PaymentsService {
           return this.applyStatusTransition(tx, locked, nextStatus);
         });
 
-        if (updatedPayment?.status === PaymentStatus.SUCCEEDED) {
-          await this.publishOrderPaidEvent({
-            ...payment,
-            order: payment.order,
-          });
+        if (updatedPayment) {
+          repaired += 1;
         }
-
-        repaired += 1;
       } catch (error) {
         this.logger.warn(
           `Reconciliation failed for payment ${payment.id}: ${
@@ -321,6 +309,33 @@ export class PaymentsService {
 
     if (nextStatus === PaymentStatus.SUCCEEDED) {
       await this.markOrderPaid(tx, payment);
+      await this.outboxService.enqueue(tx, {
+        id: `order-paid-${payment.id}`,
+        eventType: EventTypes.ORDER_PAID,
+        aggregateType: 'order',
+        aggregateId: payment.order.id,
+        payload: {
+          orderId: payment.order.id,
+          userId: payment.order.userId,
+          paymentId: payment.id,
+          amount: payment.amount,
+        },
+      });
+    }
+
+    if (nextStatus === PaymentStatus.FAILED) {
+      await this.outboxService.enqueue(tx, {
+        id: `payment-failed-${payment.id}`,
+        eventType: EventTypes.PAYMENT_FAILED,
+        aggregateType: 'payment',
+        aggregateId: payment.id,
+        payload: {
+          orderId: payment.order.id,
+          userId: payment.order.userId,
+          paymentId: payment.id,
+          reason: payment.lastError ?? undefined,
+        },
+      });
     }
 
     if (nextStatus === PaymentStatus.REFUNDED) {
@@ -393,19 +408,5 @@ export class PaymentsService {
     }
 
     await this.ordersRepository.updateStatus(tx, payment.order.id, OrderStatus.PAID);
-  }
-
-  private async publishOrderPaidEvent(payment: Payment & { order: Order }): Promise<void> {
-    await this.eventBus.publish({
-      id: `order-paid-${payment.id}`,
-      type: EventTypes.ORDER_PAID,
-      occurredAt: new Date(),
-      payload: {
-        orderId: payment.order.id,
-        userId: payment.order.userId,
-        paymentId: payment.id,
-        amount: payment.amount,
-      },
-    });
   }
 }

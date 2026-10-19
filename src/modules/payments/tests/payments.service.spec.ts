@@ -11,7 +11,7 @@ import { OrderStatus, PaymentProviderType, PaymentStatus, UserRole } from '@pris
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
-import { EventBus } from '../../events/event-bus';
+import { OutboxService } from '../../events/outbox.service';
 import { EventTypes } from '../../events/event-types';
 import { OrderStateMachine } from '../../orders/helpers';
 import { OrdersRepository } from '../../orders/orders.repository';
@@ -112,8 +112,8 @@ describe('PaymentsService', () => {
     canTransition: jest.fn(),
   };
 
-  const mockEventBus = {
-    publish: jest.fn(),
+  const mockOutboxService = {
+    enqueue: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -138,7 +138,7 @@ describe('PaymentsService', () => {
     mockPaymentStateMachine.assertCanTransition.mockReset();
     mockPaymentStateMachine.assertCanTransition.mockImplementation(() => undefined);
     mockOrderStateMachine.canTransition.mockReturnValue(true);
-    mockEventBus.publish.mockResolvedValue(undefined);
+    mockOutboxService.enqueue.mockResolvedValue({ id: 'outbox-1' });
 
     mockPrismaService.$transaction.mockImplementation((callback) => {
       if (typeof callback === 'function') {
@@ -174,7 +174,7 @@ describe('PaymentsService', () => {
         { provide: PaymentStateMachine, useValue: mockPaymentStateMachine },
         { provide: OrderStateMachine, useValue: mockOrderStateMachine },
         { provide: WalletService, useValue: mockWalletService },
-        { provide: EventBus, useValue: mockEventBus },
+        { provide: OutboxService, useValue: mockOutboxService },
       ],
     }).compile();
 
@@ -334,10 +334,13 @@ describe('PaymentsService', () => {
         'order-1',
         OrderStatus.PAID,
       );
-      expect(mockEventBus.publish).toHaveBeenCalledWith(
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
         expect.objectContaining({
           id: 'order-paid-payment-1',
-          type: EventTypes.ORDER_PAID,
+          eventType: EventTypes.ORDER_PAID,
+          aggregateType: 'order',
+          aggregateId: 'order-1',
           payload: expect.objectContaining({
             orderId: 'order-1',
             userId: 'customer-1',
@@ -371,9 +374,7 @@ describe('PaymentsService', () => {
       expect(mockPaymentsRepository.update).not.toHaveBeenCalled();
       expect(mockOrdersRepository.updateStatus).not.toHaveBeenCalled();
       expect(mockWalletService.refund).not.toHaveBeenCalled();
-      expect(mockEventBus.publish).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'order-paid-payment-1', type: EventTypes.ORDER_PAID }),
-      );
+      expect(mockOutboxService.enqueue).not.toHaveBeenCalled();
     });
 
     it('marks payment failed without updating the order', async () => {
@@ -391,7 +392,14 @@ describe('PaymentsService', () => {
 
       expect(result.status).toBe(PaymentStatus.FAILED);
       expect(mockOrdersRepository.updateStatus).not.toHaveBeenCalled();
-      expect(mockEventBus.publish).not.toHaveBeenCalled();
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          id: 'payment-failed-payment-1',
+          eventType: EventTypes.PAYMENT_FAILED,
+          aggregateId: 'payment-1',
+        }),
+      );
     });
 
     it('refunds wallet when payment is refunded', async () => {
@@ -501,8 +509,9 @@ describe('PaymentsService', () => {
         'order-1',
         OrderStatus.PAID,
       );
-      expect(mockEventBus.publish).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'order-paid-payment-1', type: EventTypes.ORDER_PAID }),
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ id: 'order-paid-payment-1', eventType: EventTypes.ORDER_PAID }),
       );
     });
   });

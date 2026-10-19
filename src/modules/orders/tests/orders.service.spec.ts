@@ -5,6 +5,8 @@ import { OrderStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
+import { OutboxService } from '../../events/outbox.service';
+import { EventTypes } from '../../events/event-types';
 import { CartService } from '../../cart/cart.service';
 import { InventoryService } from '../../inventory/inventory.service';
 import { WalletService } from '../../wallet/wallet.service';
@@ -61,6 +63,10 @@ describe('OrdersService', () => {
     canTransition: jest.fn(),
   };
 
+  const mockOutboxService = {
+    enqueue: jest.fn(),
+  };
+
   const cart = {
     items: [
       {
@@ -106,6 +112,7 @@ describe('OrdersService', () => {
         { provide: WalletService, useValue: mockWalletService },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: OrderStateMachine, useValue: mockStateMachine },
+        { provide: OutboxService, useValue: mockOutboxService },
       ],
     }).compile();
 
@@ -116,6 +123,7 @@ describe('OrdersService', () => {
       async (callback: (tx: typeof mockTransaction) => Promise<unknown>) =>
         callback(mockTransaction),
     );
+    mockOutboxService.enqueue.mockResolvedValue({ id: 'outbox-1' });
   });
 
   describe('checkout', () => {
@@ -190,6 +198,14 @@ describe('OrdersService', () => {
         OrderStatus.CANCELLED,
       );
       expect(order.status).toBe(OrderStatus.CANCELLED);
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        mockTransaction,
+        expect.objectContaining({
+          id: `order-cancelled-${paidOrder.id}`,
+          eventType: EventTypes.ORDER_CANCELLED,
+          aggregateId: paidOrder.id,
+        }),
+      );
     });
 
     it('rejects non-admin users', async () => {
@@ -215,6 +231,14 @@ describe('OrdersService', () => {
         2,
       );
       expect(order.status).toBe(OrderStatus.CANCELLED);
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        mockTransaction,
+        expect.objectContaining({
+          id: `order-cancelled-${paidOrder.id}`,
+          eventType: EventTypes.ORDER_CANCELLED,
+          aggregateId: paidOrder.id,
+        }),
+      );
     });
 
     it('rejects customer cancel after the order has shipped', async () => {

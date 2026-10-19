@@ -11,6 +11,8 @@ import type { TokenPayload } from '@/shared/types';
 
 import { CartService } from '../cart/cart.service';
 import { CartItemResponse } from '../cart/dto';
+import { EventTypes } from '../events/event-types';
+import { OutboxService } from '../events/outbox.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -27,6 +29,7 @@ export class OrdersService {
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
     private readonly stateMachine: OrderStateMachine,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async checkout(user: TokenPayload, idempotencyKey?: string): Promise<Order> {
@@ -67,6 +70,18 @@ export class OrdersService {
               quantity: item.quantity,
             };
           }),
+        },
+      });
+
+      await this.outboxService.enqueue(tx, {
+        id: `order-paid-${order.id}`,
+        eventType: EventTypes.ORDER_PAID,
+        aggregateType: 'order',
+        aggregateId: order.id,
+        payload: {
+          orderId: order.id,
+          userId: user.userId,
+          amount: order.total,
         },
       });
 
@@ -160,7 +175,13 @@ export class OrdersService {
         ),
       );
 
-      return this.ordersRepository.updateStatus(tx, orderId, OrderStatus.CANCELLED);
+      const cancelled = await this.ordersRepository.updateStatus(
+        tx,
+        orderId,
+        OrderStatus.CANCELLED,
+      );
+      await this.enqueueOrderCancelled(tx, order);
+      return cancelled;
     });
   }
 
@@ -192,7 +213,13 @@ export class OrdersService {
         ),
       );
 
-      return this.ordersRepository.updateStatus(tx, orderId, OrderStatus.CANCELLED);
+      const cancelled = await this.ordersRepository.updateStatus(
+        tx,
+        orderId,
+        OrderStatus.CANCELLED,
+      );
+      await this.enqueueOrderCancelled(tx, order);
+      return cancelled;
     });
   }
 
@@ -230,6 +257,22 @@ export class OrdersService {
         );
       }
     }
+  }
+
+  private async enqueueOrderCancelled(
+    transaction: Prisma.TransactionClient,
+    order: Order,
+  ): Promise<void> {
+    await this.outboxService.enqueue(transaction, {
+      id: `order-cancelled-${order.id}`,
+      eventType: EventTypes.ORDER_CANCELLED,
+      aggregateType: 'order',
+      aggregateId: order.id,
+      payload: {
+        orderId: order.id,
+        userId: order.userId,
+      },
+    });
   }
 
   private async decrementProductStock(
