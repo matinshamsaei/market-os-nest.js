@@ -16,7 +16,9 @@ import { DomainEventsRepository } from './domain-events.repository';
 import { EventBus } from './event-bus';
 import { EventDeliveryService } from './event-delivery.service';
 import { EventsController } from './events.controller';
+import { OutboxRepository } from './outbox.repository';
 import { OutboxService } from './outbox.service';
+import { OutboxWorker } from './outbox.worker';
 import { createRedisConnection } from './redis-connection';
 
 @Module({
@@ -52,7 +54,9 @@ import { createRedisConnection } from './redis-connection';
     DomainEventsRepository,
     EventDeliveryService,
     EventBus,
+    OutboxRepository,
     OutboxService,
+    OutboxWorker,
   ],
   exports: [EventBus, EventDeliveryService, OutboxService],
 })
