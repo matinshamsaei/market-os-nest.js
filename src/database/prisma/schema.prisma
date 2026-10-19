@@ -28,6 +28,7 @@ model User {
   orders        Order[]
   wallet        Wallet?
   notifications Notification[]
+  notificationPreferences NotificationPreference[]
 
   @@map("users")
 }
@@ -285,6 +286,24 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, status])
   @@map("notifications")
+}
+
+model NotificationPreference {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  notificationType NotificationType
+  channel          NotificationChannel
+  enabled          Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, notificationType, channel])
+  @@index([userId])
+  @@map("notification_preferences")
 }
 
 // Domain events
