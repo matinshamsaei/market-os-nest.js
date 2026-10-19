@@ -25,6 +25,7 @@
     "infra:logs": "docker compose logs -f",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prepare": "husky"
   },

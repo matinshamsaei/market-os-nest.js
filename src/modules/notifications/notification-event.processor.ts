@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Job, Worker } from 'bullmq';
 
 import { DOMAIN_EVENTS_QUEUE } from '../events/domain-events.queue';
+import { EventDeliveryService } from '../events/event-delivery.service';
 import { DomainEventJob } from '../events/event-publisher';
 import { createRedisConnection } from '../events/redis-connection';
 
@@ -16,6 +17,7 @@ export class NotificationEventProcessor implements OnModuleInit, OnModuleDestroy
   constructor(
     private readonly configService: ConfigService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventDeliveryService: EventDeliveryService,
   ) {}
 
   onModuleInit(): void {
@@ -29,10 +31,22 @@ export class NotificationEventProcessor implements OnModuleInit, OnModuleDestroy
   }
 
   async process(job: Job<DomainEventJob>): Promise<void> {
-    const notification = await this.notificationsService.createFromDomainEvent(job.data);
+    const claimed = await this.eventDeliveryService.beginAttempt(job.data.id);
 
-    if (!notification) {
-      this.logger.warn(`No notification mapping for event ${job.data.type}`);
+    if (!claimed) {
+      return;
+    }
+
+    try {
+      const notification = await this.notificationsService.createFromDomainEvent(job.data);
+
+      if (!notification) {
+        this.logger.warn(`No notification mapping for event ${job.data.type}`);
+      }
+
+      await this.eventDeliveryService.markCompleted(job.data.id);
+    } catch (error) {
+      await this.eventDeliveryService.recordFailure(job.data, error);
     }
   }
 }

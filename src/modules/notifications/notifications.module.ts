@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '@/database/prisma/prisma.module';
 
 import { AuthModule } from '../auth/auth.module';
+import { EventsModule } from '../events/events.module';
 
 import { NotificationEventProcessor } from './notification-event.processor';
 import { NotificationsController } from './notifications.controller';
@@ -10,7 +11,7 @@ import { NotificationsRepository } from './notifications.repository';
 import { NotificationsService } from './notifications.service';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [AuthModule, EventsModule, PrismaModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsRepository, NotificationEventProcessor],
   exports: [NotificationsService, NotificationsRepository],
