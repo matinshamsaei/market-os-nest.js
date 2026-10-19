@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { OutboxEventStatus } from '@prisma/client';
 
 import { EventTypes } from '../event-types';
@@ -33,6 +34,7 @@ describe('OutboxWorker', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
   it('publishes a claimed event and marks it processed', async () => {
