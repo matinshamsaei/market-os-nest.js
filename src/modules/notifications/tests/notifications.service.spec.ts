@@ -10,8 +10,10 @@ import {
 import type { TokenPayload } from '@/shared/types';
 
 import { EventTypes } from '../../events/event-types';
+import { NotificationPreferencesService } from '../notification-preferences.service';
 import { NotificationsRepository } from '../notifications.repository';
 import { NotificationsService } from '../notifications.service';
+import { NotificationDispatcher } from '../channels/notification-dispatcher';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
@@ -46,17 +48,25 @@ describe('NotificationsService', () => {
     findByIdForUser: jest.fn(),
     markReadIfUnread: jest.fn(),
     markAllRead: jest.fn(),
+    markSent: jest.fn(),
     create: jest.fn(),
+  };
+
+  const preferencesService = {
+    isEnabled: jest.fn(),
+  };
+
+  const notificationDispatcher = {
+    send: jest.fn(),
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
-        {
-          provide: NotificationsRepository,
-          useValue: mockNotificationsRepository,
-        },
+        { provide: NotificationsRepository, useValue: mockNotificationsRepository },
+        { provide: NotificationPreferencesService, useValue: preferencesService },
+        { provide: NotificationDispatcher, useValue: notificationDispatcher },
       ],
     }).compile();
 
@@ -165,8 +175,16 @@ describe('NotificationsService', () => {
 
   describe('createFromDomainEvent', () => {
     it('creates an in-app notification from an order paid event', async () => {
-      const created = { ...unread, eventId: 'order-paid-payment-1' };
+      const created = {
+        ...unread,
+        eventId: 'order-paid-payment-1',
+        status: NotificationStatus.PENDING,
+      };
+      const sent = { ...created, status: NotificationStatus.SENT };
+      preferencesService.isEnabled.mockResolvedValue(true);
       mockNotificationsRepository.create.mockResolvedValue(created);
+      notificationDispatcher.send.mockResolvedValue(undefined);
+      mockNotificationsRepository.markSent.mockResolvedValue(sent);
 
       await expect(
         service.createFromDomainEvent({
@@ -180,7 +198,7 @@ describe('NotificationsService', () => {
             amount: 200,
           },
         }),
-      ).resolves.toEqual(created);
+      ).resolves.toEqual(sent);
 
       expect(mockNotificationsRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -188,9 +206,31 @@ describe('NotificationsService', () => {
           userId: customer.userId,
           type: NotificationType.ORDER_PAID,
           channel: NotificationChannel.IN_APP,
+          status: NotificationStatus.PENDING,
           message: 'Your order order-1 has been paid successfully.',
         }),
       );
+      expect(notificationDispatcher.send).toHaveBeenCalledWith(created);
+    });
+
+    it('does not deliver a disabled notification', async () => {
+      preferencesService.isEnabled.mockResolvedValue(false);
+
+      await expect(
+        service.createFromDomainEvent({
+          id: 'order-paid-payment-1',
+          type: EventTypes.ORDER_PAID,
+          occurredAt: '2026-01-01T00:00:00.000Z',
+          payload: {
+            orderId: 'order-1',
+            userId: customer.userId,
+            amount: 200,
+          },
+        }),
+      ).resolves.toBeNull();
+
+      expect(mockNotificationsRepository.create).not.toHaveBeenCalled();
+      expect(notificationDispatcher.send).not.toHaveBeenCalled();
     });
 
     it('skips events that do not map to a notification', async () => {

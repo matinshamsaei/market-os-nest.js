@@ -1,4 +1,4 @@
-import { NotificationChannel, NotificationStatus, NotificationType } from '@prisma/client';
+import { NotificationChannel, NotificationType } from '@prisma/client';
 
 import { DomainEventJob } from '../events/event-publisher';
 import { EventType, EventTypes } from '../events/event-types';
@@ -65,6 +65,5 @@ export function toNotification(event: DomainEventJob): CreateNotificationData | 
     channel: NotificationChannel.IN_APP,
     title: definition.title,
     message: definition.message(payload),
-    status: NotificationStatus.SENT,
   };
 }

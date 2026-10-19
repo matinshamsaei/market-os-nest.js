@@ -80,6 +80,13 @@ export class NotificationsRepository {
       .then((result) => result.count);
   }
 
+  markSent(id: string): Promise<Notification> {
+    return this.prisma.notification.update({
+      where: { id },
+      data: { status: NotificationStatus.SENT },
+    });
+  }
+
   findByEventId(eventId: string): Promise<Notification | null> {
     return this.prisma.notification.findUnique({
       where: { eventId },

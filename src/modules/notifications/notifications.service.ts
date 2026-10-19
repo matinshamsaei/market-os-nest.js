@@ -1,19 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { Notification } from '@prisma/client';
+import { Notification, NotificationStatus } from '@prisma/client';
 
 import type { PaginatedResult } from '@/shared/pagination';
 import type { TokenPayload } from '@/shared/types';
 
 import { DomainEventJob } from '../events/event-publisher';
 
+import { NotificationDispatcher } from './channels/notification-dispatcher';
 import { GetNotificationsQueryDto } from './dto';
+import { NotificationPreferencesService } from './notification-preferences.service';
 import { toNotification } from './notification-from-event';
 import { CreateNotificationData, NotificationsRepository } from './notifications.repository';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly notificationsRepository: NotificationsRepository) {}
+  constructor(
+    private readonly notificationsRepository: NotificationsRepository,
+    private readonly preferencesService: NotificationPreferencesService,
+    private readonly notificationDispatcher: NotificationDispatcher,
+  ) {}
 
   getNotifications(
     user: TokenPayload,
@@ -56,13 +62,30 @@ export class NotificationsService {
     return this.notificationsRepository.create(data);
   }
 
-  createFromDomainEvent(event: DomainEventJob): Promise<Notification | null> {
+  async createFromDomainEvent(event: DomainEventJob): Promise<Notification | null> {
     const data = toNotification(event);
 
     if (!data?.userId) {
-      return Promise.resolve(null);
+      return null;
     }
 
-    return this.notificationsRepository.create(data);
+    const enabled = await this.preferencesService.isEnabled(data.userId, data.type, data.channel);
+
+    if (!enabled) {
+      return null;
+    }
+
+    const notification = await this.notificationsRepository.create({
+      ...data,
+      status: NotificationStatus.PENDING,
+    });
+
+    if (notification.status === NotificationStatus.SENT) {
+      return notification;
+    }
+
+    await this.notificationDispatcher.send(notification);
+
+    return this.notificationsRepository.markSent(notification.id);
   }
 }
