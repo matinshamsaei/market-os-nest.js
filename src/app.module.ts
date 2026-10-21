@@ -9,9 +9,11 @@ import { ProductsModule } from './modules/products/products.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { UsersModule } from './modules/users/users.module';
 import { CartModule } from './modules/cart/cart.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { EventsModule } from './modules/events/events.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -23,9 +25,11 @@ import { AppService } from './app.service';
     OrdersModule,
     WalletModule,
     PaymentsModule,
+    NotificationsModule,
     UsersModule,
     CartModule,
     AuthModule,
+    EventsModule,
 
     PrismaModule,
     ScheduleModule.forRoot(),

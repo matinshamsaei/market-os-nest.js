@@ -23,10 +23,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products Product[]
-  carts    Cart[]
-  orders   Order[]
-  wallet   Wallet?
+  products      Product[]
+  carts         Cart[]
+  orders        Order[]
+  wallet        Wallet?
+  notifications Notification[]
+  notificationPreferences NotificationPreference[]
 
   @@map("users")
 }
@@ -243,4 +245,115 @@ model ProcessedPaymentWebhook {
   @@unique([provider, eventId])
   @@index([paymentId])
   @@map("processed_payment_webhooks")
+}
+
+// Notifications
+enum NotificationType {
+  ORDER_PAID
+  ORDER_SHIPPED
+  ORDER_CANCELLED
+  PAYMENT_FAILED
+  REFUND_COMPLETED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  type    NotificationType
+  channel NotificationChannel
+  title   String
+  message String
+  status  NotificationStatus @default(PENDING)
+  readAt  DateTime?
+  eventId String?              @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  notificationType NotificationType
+  channel          NotificationChannel
+  enabled          Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, notificationType, channel])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+
+// Domain events
+enum DomainEventStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD
+}
+
+model DomainEventRecord {
+  id           String            @id
+  type         String
+  payload      Json
+  status       DomainEventStatus @default(PENDING)
+  attemptCount Int               @default(0)
+  maxAttempts  Int
+  lastError    String?
+  nextRetryAt  DateTime?
+  occurredAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@map("domain_events")
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD
+}
+
+model OutboxEvent {
+  id            String            @id
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  availableAt   DateTime          @default(now())
+  processedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime          @default(now())
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
 }

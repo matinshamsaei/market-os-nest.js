@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '@/database/prisma/prisma.module';
 
 import { AuthModule } from '../auth/auth.module';
+import { EventsModule } from '../events/events.module';
 import { OrdersModule } from '../orders/orders.module';
 import { WalletModule } from '../wallet/wallet.module';
 
@@ -19,7 +20,7 @@ import { PaymentsRepository } from './payments.repository';
 import { PaymentsService } from './payments.service';
 
 @Module({
-  imports: [AuthModule, OrdersModule, WalletModule, PrismaModule],
+  imports: [AuthModule, EventsModule, OrdersModule, WalletModule, PrismaModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsService,

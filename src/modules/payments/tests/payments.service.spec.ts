@@ -11,6 +11,8 @@ import { OrderStatus, PaymentProviderType, PaymentStatus, UserRole } from '@pris
 import { PrismaService } from '@/database/prisma/prisma.service';
 import type { TokenPayload } from '@/shared/types';
 
+import { OutboxService } from '../../events/outbox.service';
+import { EventTypes } from '../../events/event-types';
 import { OrderStateMachine } from '../../orders/helpers';
 import { OrdersRepository } from '../../orders/orders.repository';
 import { WalletService } from '../../wallet/wallet.service';
@@ -110,6 +112,10 @@ describe('PaymentsService', () => {
     canTransition: jest.fn(),
   };
 
+  const mockOutboxService = {
+    enqueue: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -132,6 +138,7 @@ describe('PaymentsService', () => {
     mockPaymentStateMachine.assertCanTransition.mockReset();
     mockPaymentStateMachine.assertCanTransition.mockImplementation(() => undefined);
     mockOrderStateMachine.canTransition.mockReturnValue(true);
+    mockOutboxService.enqueue.mockResolvedValue({ id: 'outbox-1' });
 
     mockPrismaService.$transaction.mockImplementation((callback) => {
       if (typeof callback === 'function') {
@@ -167,6 +174,7 @@ describe('PaymentsService', () => {
         { provide: PaymentStateMachine, useValue: mockPaymentStateMachine },
         { provide: OrderStateMachine, useValue: mockOrderStateMachine },
         { provide: WalletService, useValue: mockWalletService },
+        { provide: OutboxService, useValue: mockOutboxService },
       ],
     }).compile();
 
@@ -290,6 +298,11 @@ describe('PaymentsService', () => {
         amount: 200,
       });
       mockPaymentsRepository.findByProviderPaymentIdForUpdate.mockResolvedValue(processingPayment);
+      mockPaymentsRepository.findByIdWithOrder.mockResolvedValue({
+        ...processingPayment,
+        status: PaymentStatus.SUCCEEDED,
+        order: { ...pendingOrder, status: OrderStatus.PAID },
+      });
       mockPaymentsRepository.update.mockResolvedValue({
         ...processingPayment,
         status: PaymentStatus.SUCCEEDED,
@@ -321,6 +334,21 @@ describe('PaymentsService', () => {
         'order-1',
         OrderStatus.PAID,
       );
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          id: 'order-paid-payment-1',
+          eventType: EventTypes.ORDER_PAID,
+          aggregateType: 'order',
+          aggregateId: 'order-1',
+          payload: expect.objectContaining({
+            orderId: 'order-1',
+            userId: 'customer-1',
+            paymentId: 'payment-1',
+            amount: 200,
+          }),
+        }),
+      );
     });
 
     it('is idempotent for duplicate event ids', async () => {
@@ -346,6 +374,7 @@ describe('PaymentsService', () => {
       expect(mockPaymentsRepository.update).not.toHaveBeenCalled();
       expect(mockOrdersRepository.updateStatus).not.toHaveBeenCalled();
       expect(mockWalletService.refund).not.toHaveBeenCalled();
+      expect(mockOutboxService.enqueue).not.toHaveBeenCalled();
     });
 
     it('marks payment failed without updating the order', async () => {
@@ -363,6 +392,14 @@ describe('PaymentsService', () => {
 
       expect(result.status).toBe(PaymentStatus.FAILED);
       expect(mockOrdersRepository.updateStatus).not.toHaveBeenCalled();
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          id: 'payment-failed-payment-1',
+          eventType: EventTypes.PAYMENT_FAILED,
+          aggregateId: 'payment-1',
+        }),
+      );
     });
 
     it('refunds wallet when payment is refunded', async () => {
@@ -471,6 +508,10 @@ describe('PaymentsService', () => {
         expect.anything(),
         'order-1',
         OrderStatus.PAID,
+      );
+      expect(mockOutboxService.enqueue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ id: 'order-paid-payment-1', eventType: EventTypes.ORDER_PAID }),
       );
     });
   });

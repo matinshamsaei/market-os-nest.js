@@ -14,6 +14,10 @@ export async function cleanupUsers(prisma: PrismaService): Promise<void> {
 }
 
 export async function cleanupMarketplace(prisma: PrismaService): Promise<void> {
+  await prisma.notification.deleteMany();
+  await prisma.notificationPreference.deleteMany();
+  await prisma.domainEventRecord.deleteMany();
+  await prisma.outboxEvent.deleteMany();
   await prisma.processedPaymentWebhook.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.orderItem.deleteMany();
