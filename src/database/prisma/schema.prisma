@@ -14,20 +14,17 @@ enum UserRole {
 }
 
 model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  password String
-
-  role UserRole @default(CUSTOMER)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  products      Product[]
-  carts         Cart[]
-  orders        Order[]
-  wallet        Wallet?
-  notifications Notification[]
+  id                      String                   @id @default(uuid())
+  email                   String                   @unique
+  password                String
+  role                    UserRole                 @default(CUSTOMER)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  products                Product[]
+  carts                   Cart[]
+  orders                  Order[]
+  wallet                  Wallet?
+  notifications           Notification[]
   notificationPreferences NotificationPreference[]
 
   @@map("users")
@@ -46,17 +43,13 @@ model Product {
   description String?
   price       Float
   status      ProductStatus? @default(DRAFT)
-
-  vendor   User   @relation(fields: [vendorId], references: [id])
-  vendorId String
-
-  inventory Inventory?
-
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  cartItems CartItem[]
-
-  orderItems OrderItem[]
+  vendor      User           @relation(fields: [vendorId], references: [id])
+  vendorId    String
+  inventory   Inventory?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
 
   @@index([vendorId])
   @@map("products")
@@ -64,12 +57,10 @@ model Product {
 
 // Inventories
 model Inventory {
-  id       String @id @default(uuid())
-  quantity Int
-
-  product   Product @relation(fields: [productId], references: [id])
-  productId String  @unique
-
+  id        String   @id @default(uuid())
+  quantity  Int
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -77,31 +68,24 @@ model Inventory {
 }
 
 model Cart {
-  id String @id @default(uuid())
-
-  customer   User   @relation(fields: [customerId], references: [id])
-  customerId String @unique
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  cartItems CartItem[]
+  id         String     @id @default(uuid())
+  customer   User       @relation(fields: [customerId], references: [id])
+  customerId String     @unique
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  cartItems  CartItem[]
 
   @@index([customerId])
   @@map("carts")
 }
 
 model CartItem {
-  id String @id @default(uuid())
-
-  cart   Cart   @relation(fields: [cartId], references: [id])
-  cartId String
-
-  product   Product @relation(fields: [productId], references: [id])
+  id        String   @id @default(uuid())
+  cart      Cart     @relation(fields: [cartId], references: [id])
+  cartId    String
+  product   Product  @relation(fields: [productId], references: [id])
   productId String
-
-  quantity Int
-
+  quantity  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -119,19 +103,14 @@ enum OrderStatus {
 }
 
 model Order {
-  id String @id @default(uuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  status OrderStatus @default(PENDING)
-
-  total    Float
-  subTotal Float
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id         String      @id @default(uuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  status     OrderStatus @default(PENDING)
+  total      Float
+  subTotal   Float
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   orderItems OrderItem[]
   payments   Payment[]
 
@@ -139,18 +118,14 @@ model Order {
 }
 
 model OrderItem {
-  id String @id @default(uuid())
-
-  order   Order  @relation(fields: [orderId], references: [id])
-  orderId String
-
-  product   Product @relation(fields: [productId], references: [id])
-  productId String
-
+  id                   String  @id @default(uuid())
+  order                Order   @relation(fields: [orderId], references: [id])
+  orderId              String
+  product              Product @relation(fields: [productId], references: [id])
+  productId            String
   productTitleSnapshot String
   productPriceSnapshot Float
-
-  quantity Int
+  quantity             Int
 }
 
 // Wallet
@@ -162,30 +137,24 @@ enum WalletTransactionType {
 }
 
 model Wallet {
-  id      String @id @default(uuid())
-  balance Float    @default(0)
-
+  id           String              @id @default(uuid())
+  balance      Float               @default(0)
   transactions WalletTransaction[]
-
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userId       String              @unique
+  user         User                @relation(fields: [userId], references: [id])
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@map("wallets")
 }
 
 model WalletTransaction {
-  id String @id @default(uuid())
-
-  type   WalletTransactionType
-  amount Float
-
-  walletId String
-  wallet   Wallet @relation(fields: [walletId], references: [id])
-
-  createdAt DateTime @default(now())
+  id        String                @id @default(uuid())
+  type      WalletTransactionType
+  amount    Float
+  walletId  String
+  wallet    Wallet                @relation(fields: [walletId], references: [id])
+  createdAt DateTime              @default(now())
 
   @@index([walletId, createdAt])
   @@map("wallet_transactions")
@@ -208,23 +177,19 @@ enum PaymentProviderType {
 }
 
 model Payment {
-  id String @id @default(uuid())
-
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id])
-
+  id                String                    @id @default(uuid())
+  orderId           String
+  order             Order                     @relation(fields: [orderId], references: [id])
   provider          PaymentProviderType
   providerPaymentId String?
-  status            PaymentStatus       @default(PENDING)
+  status            PaymentStatus             @default(PENDING)
   amount            Float
-  currency          String              @default("IRR")
-  attemptCount      Int                 @default(1)
+  currency          String                    @default("IRR")
+  attemptCount      Int                       @default(1)
   lastError         String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  webhookEvents ProcessedPaymentWebhook[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  webhookEvents     ProcessedPaymentWebhook[]
 
   @@index([orderId])
   @@index([providerPaymentId])
@@ -233,14 +198,12 @@ model Payment {
 }
 
 model ProcessedPaymentWebhook {
-  id String @id @default(uuid())
-
+  id        String              @id @default(uuid())
   provider  PaymentProviderType
   eventId   String
   paymentId String?
   payment   Payment?            @relation(fields: [paymentId], references: [id])
-
-  createdAt DateTime @default(now())
+  createdAt DateTime            @default(now())
 
   @@unique([provider, eventId])
   @@index([paymentId])
@@ -268,20 +231,17 @@ enum NotificationStatus {
 }
 
 model Notification {
-  id String @id @default(uuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  type    NotificationType
-  channel NotificationChannel
-  title   String
-  message String
-  status  NotificationStatus @default(PENDING)
-  readAt  DateTime?
-  eventId String?              @unique
-
-  createdAt DateTime @default(now())
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id])
+  type      NotificationType
+  channel   NotificationChannel
+  title     String
+  message   String
+  status    NotificationStatus  @default(PENDING)
+  readAt    DateTime?
+  eventId   String?             @unique
+  createdAt DateTime            @default(now())
 
   @@index([userId, createdAt])
   @@index([userId, status])
@@ -289,17 +249,14 @@ model Notification {
 }
 
 model NotificationPreference {
-  id String @id @default(uuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
+  id               String              @id @default(uuid())
+  userId           String
+  user             User                @relation(fields: [userId], references: [id])
   notificationType NotificationType
   channel          NotificationChannel
   enabled          Boolean             @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@unique([userId, notificationType, channel])
   @@index([userId])
@@ -325,9 +282,8 @@ model DomainEventRecord {
   lastError    String?
   nextRetryAt  DateTime?
   occurredAt   DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@index([status, updatedAt])
   @@map("domain_events")
